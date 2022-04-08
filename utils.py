@@ -1,130 +1,141 @@
-#Cellular Automata
-# Citations
-
+# Python code to implement Conway's Game Of Life
+import argparse
 import numpy as np
 import matplotlib.pyplot as plt
 import matplotlib.animation as animation
 
-# ignore warnings
-import warnings
-warnings.filterwarnings("ignore")
+# setting up the values for the grid
+ON = 255
+OFF = 0
+vals = [ON, OFF]
 
+def randomGrid(N):
 
-powers_of_two = np.array([[4], [2], [1]])  # shape (3, 1)
+    """returns a grid of NxN random values"""
+    return np.random.choice(vals, N*N, p=[0.2, 0.8]).reshape(N, N)
 
-def step(x, rule_binary):
-    """Makes one step in the cellular automaton.
+def addGlider(i, j, grid):
 
-    Args:
-        x (np.array): current state of the automaton
-        rule_binary (np.array): the update rule
+    """adds a glider with top left cell at (i, j)"""
+    glider = np.array([[0, 0, 255],
+                    [255, 0, 255],
+                    [0, 255, 255]])
+    grid[i:i+3, j:j+3] = glider
 
-    Returns:
-        np.array: updated state of the automaton
-    """
-    x_shift_right = np.roll(x, 1)  # circular shift to right
-    x_shift_left = np.roll(x, -1)  # circular shift to left
-    y = np.vstack((x_shift_right, x, x_shift_left)).astype(np.int8)  # stack row-wise, shape (3, cols)
-    z = np.sum(powers_of_two * y, axis=0).astype(np.int8)  # LCR pattern as number
+def addGosperGliderGun(i, j, grid):
 
-    return rule_binary[7 - z]
+    """adds a Gosper Glider Gun with top left
+    cell at (i, j)"""
+    gun = np.zeros(11*38).reshape(11, 38)
 
-def cellular_automaton(rule_number, size, steps,
-                       init_cond='random', impulse_pos='center'):
-    """Generate the state of an elementary cellular automaton after a pre-determined
-    number of steps starting from some random state.
+    gun[5][1] = gun[5][2] = 255
+    gun[6][1] = gun[6][2] = 255
 
-    Args:
-        rule_number (int): the number of the update rule to use
-        size (int): number of cells in the row
-        steps (int): number of steps to evolve the automaton
-        init_cond (str): either `random` or `impulse`. If `random` every cell
-        in the row is activated with prob. 0.5. If `impulse` only one cell
-        is activated.
-        impulse_pos (str): if `init_cond` is `impulse`, activate the
-        left-most, central or right-most cell.
+    gun[3][13] = gun[3][14] = 255
+    gun[4][12] = gun[4][16] = 255
+    gun[5][11] = gun[5][17] = 255
+    gun[6][11] = gun[6][15] = gun[6][17] = gun[6][18] = 255
+    gun[7][11] = gun[7][17] = 255
+    gun[8][12] = gun[8][16] = 255
+    gun[9][13] = gun[9][14] = 255
 
-    Returns:
-        np.array: final state of the automaton
-    """
-    assert 0 <= rule_number <= 255
-    assert init_cond in ['random', 'impulse']
-    assert impulse_pos in ['left', 'center', 'right']
+    gun[1][25] = 255
+    gun[2][23] = gun[2][25] = 255
+    gun[3][21] = gun[3][22] = 255
+    gun[4][21] = gun[4][22] = 255
+    gun[5][21] = gun[5][22] = 255
+    gun[6][23] = gun[6][25] = 255
+    gun[7][25] = 255
+
+    gun[3][35] = gun[3][36] = 255
+    gun[4][35] = gun[4][36] = 255
+
+    grid[i:i+11, j:j+38] = gun
+
+def update(frameNum, img, grid, N):
+
+    # copy grid since we require 8 neighbors
+    # for calculation and we go line by line
+    newGrid = grid.copy()
+    for i in range(N):
+        for j in range(N):
+
+            # compute 8-neighbor sum
+            # using toroidal boundary conditions - x and y wrap around
+            # so that the simulaton takes place on a toroidal surface.
+            total = int((grid[i, (j-1)%N] + grid[i, (j+1)%N] +
+                        grid[(i-1)%N, j] + grid[(i+1)%N, j] +
+                        grid[(i-1)%N, (j-1)%N] + grid[(i-1)%N, (j+1)%N] +
+                        grid[(i+1)%N, (j-1)%N] + grid[(i+1)%N, (j+1)%N])/255)
+
+            # apply Conway's rules
+            if grid[i, j] == ON:
+                if (total < 2) or (total > 3):
+                    newGrid[i, j] = OFF
+            else:
+                if total == 3:
+                    newGrid[i, j] = ON
+
+    # update data
+    img.set_data(newGrid)
+    grid[:] = newGrid[:]
+    return img,
+
+# main() function
+def main():
+
+    # Command line args are in sys.argv[1], sys.argv[2] ..
+    # sys.argv[0] is the script name itself and can be ignored
+    # parse arguments
+    parser = argparse.ArgumentParser(description="Runs Conway's Game of Life simulation.")
+
+    # add arguments
+    parser.add_argument('--grid-size', dest='N', required=False)
+    parser.add_argument('--mov-file', dest='movfile', required=False)
+    parser.add_argument('--interval', dest='interval', required=False)
+    parser.add_argument('--glider', action='store_true', required=False)
+    parser.add_argument('--gosper', action='store_true', required=False)
+    args = parser.parse_args()
     
-    rule_binary_str = np.binary_repr(rule_number, width=8)
-    rule_binary = np.array([int(ch) for ch in rule_binary_str], dtype=np.int8)
-    x = np.zeros((steps, size), dtype=np.int8)
-    
-    if init_cond == 'random':  # random init of the first step
-        x[0, :] = np.array(np.random.rand(size) < 0.5, dtype=np.int8)
+    # set grid size
+    N = 100
+    if args.N and int(args.N) > 8:
+        N = int(args.N)
+        
+    # set animation update interval
+    updateInterval = 50
+    if args.interval:
+        updateInterval = int(args.interval)
 
-    if init_cond == 'impulse':  # starting with an initial impulse
-        if impulse_pos == 'left':
-            x[0, 0] = 1
-        elif impulse_pos == 'right':
-            x[0, size - 1] = 1
-        else:
-            x[0, size // 2] = 1
-    
-    for i in range(steps - 1):
-        x[i + 1, :] = step(x[i, :], rule_binary)
-    
-    return x
+    # declare grid
+    grid = np.array([])
 
+    # check if "glider" demo flag is specified
+    if args.glider:
+        grid = np.zeros(N*N).reshape(N, N)
+        addGlider(1, 1, grid)
+    elif args.gosper:
+        grid = np.zeros(N*N).reshape(N, N)
+        addGosperGliderGun(10, 10, grid)
 
-rule_number = 60  # select the update rule
-size = 100  # number of cells in one row
-steps = 63  # number of time steps
-init_cond='impulse'  # start with only one cell
-impulse_pos='left'  # start with the left-most cell
+    else: # populate grid with random on/off -
+            # more off than on
+        grid = randomGrid(N)
 
-x = cellular_automaton(rule_number, size, steps, init_cond, impulse_pos)
+    # set up animation
+    fig, ax = plt.subplots()
+    img = ax.imshow(grid, interpolation='nearest')
+    ani = animation.FuncAnimation(fig, update, fargs=(img, grid, N, ),
+                                frames = 10,
+                                interval=updateInterval, blit = True, save_count=50)
 
-fig = plt.figure(figsize=(10, 10))
+    # # of frames?
+    # set output file
+    if args.movfile:
+        ani.save(args.movfile, fps=30, extra_args=['-vcodec', 'libx264'])
 
-ax = plt.axes()
-ax.set_axis_off()
+    plt.show()
 
-ax.imshow(x, interpolation='none',cmap='RdPu')
-plt.savefig('elementary_cellular_automaton.png', dpi=300, bbox_inches='tight')
-
-
-
-rule_number = 90  # select the update rule
-size = 100  # number of cells in one row
-steps = 500  # number of time steps
-init_cond='impulse'  # start with only one cell
-impulse_pos='center'  # start with the central cell
-
-x = cellular_automaton(rule_number, size, steps, init_cond, impulse_pos)
-
-steps_to_show = 100  # number of steps to show in the animation window
-iterations_per_frame = 1  # how many steps to show per frame
-frames = int(steps // iterations_per_frame)  # number of frames in the animation
-interval=50  # interval in ms between consecutive frames
-
-fig = plt.figure(figsize=(10, 10))
-
-ax = plt.axes()
-ax.set_axis_off()
-
-def animate(i):
-    ax.clear()  # clear the plot
-    ax.set_axis_off()  # disable axis
-    
-    Y = np.zeros((steps_to_show, size), dtype=np.int8)  # initialize with all zeros
-    upper_boundary = (i + 1) * iterations_per_frame  # window upper boundary
-    lower_boundary = 0 if upper_boundary <= steps_to_show else upper_boundary - steps_to_show  # window lower bound.
-    for t in range(lower_boundary, upper_boundary):  # assign the values
-        Y[t - lower_boundary, :] = x[t, :]
-    
-    img = ax.imshow(Y, interpolation='none',cmap='RdPu')
-    plt.gcf().text(0.15, 0.1, 'by Vladimir Ilievski', fontsize=18, fontfamily='Verdana')
-    return [img]
-    
-# call the animator
-anim = animation.FuncAnimation(fig, animate, frames=frames, interval=50, blit=True)
-anim.save('elementary_cellular_automaton.gif', writer='imagemagick') 
-
- 
-
+# call main
+if __name__ == '__main__':
+    main()
