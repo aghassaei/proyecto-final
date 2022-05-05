@@ -2,10 +2,13 @@
 import argparse
 import numpy as np
 import matplotlib.pyplot as plt
+plt.ion()
 import matplotlib.animation as animation
 
 #from amanda
-anim=None
+
+#from amanda
+ani=None
 # setting up the values for the grid
 ON = 255
 OFF = 0
@@ -86,7 +89,7 @@ def update(frameNum, img, grid, N):
 # main() function
 def main():
 	#amanda v
-	global anim
+	global ani
 	# Command line args are in sys.argv[1], sys.argv[2] ..
 	# sys.argv[0] is the script name itself and can be ignored
 	# parse arguments
@@ -145,3 +148,4 @@ def main():
 # call main
 if __name__ == '__main__':
 	main()
+	#input('press enter to exit')
